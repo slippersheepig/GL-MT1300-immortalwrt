@@ -1,4 +1,4 @@
-name: mt7981-config
+name: config
 
 on:
   workflow_dispatch:
