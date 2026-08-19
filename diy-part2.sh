@@ -8,7 +8,8 @@
 #
 # This is free software, licensed under the MIT License.
 # See /LICENSE for more information.
-#
+
+set -e
 
 # Modify default IP
 sed -i 's/192.168.1.1/192.168.6.1/g' package/base-files/files/bin/config_generate
@@ -21,7 +22,7 @@ sed -i 's/luci-theme-bootstrap/luci-theme-argon/g' feeds/luci/collections/luci/M
 sed -i 's/OpenWrt/Sheep-Router/g' package/base-files/files/bin/config_generate
 
 # Update sing-box from OpenWrt packages master because immortalwrt/packages may lag
-# behind sing-box stable releases.  This keeps CONFIG_PACKAGE_sing-box-tiny=y in
+# behind sing-box stable releases. This keeps CONFIG_PACKAGE_sing-box-tiny=y in
 # .config effective by refreshing the feed package and re-installing its package
 # symlink before the final defconfig/build steps.
 update_sing_box_from_openwrt() {
@@ -54,12 +55,32 @@ update_sing_box_from_openwrt() {
   fi
 }
 
+# Keep HomeProxy's generated JSON aligned with the sing-box version selected above.
+# The compatibility layer patches the generator, not /etc/init.d/homeproxy, so the
+# generated config itself is valid and the workaround is preserved across restarts.
+patch_homeproxy_sing_box_compat() {
+  # The workflow executes diy-part2.sh after `cd openwrt`, so $(pwd) is the
+  # OpenWrt source tree, not the GitHub repository root. Prefer the workspace
+  # path supplied by GitHub Actions, and fall back to the script directory.
+  local repo_root="${GITHUB_WORKSPACE:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+  local patch_script="${repo_root}/patches/homeproxy-singbox-compat.sh"
+
+  if [ ! -f "${patch_script}" ]; then
+    echo "==> ERROR: missing ${patch_script}"
+    return 1
+  fi
+
+  chmod +x "${patch_script}"
+  OPENWRT_ROOT="$(pwd)" "${patch_script}"
+}
+
 update_sing_box_from_openwrt
+patch_homeproxy_sing_box_compat
 
 # echo "==> 更新 adguardhome 到最新版本"
-#rm -rf feeds/packages/net/adguardhome
-#git clone --depth 1 https://github.com/kenzok8/openwrt-packages tmp-kenzo
-#mv tmp-kenzo/adguardhome feeds/packages/net/
-#rm -rf tmp-kenzo
-#sed -i '\#files/adguardhome#d' feeds/packages/net/adguardhome/Makefile
-#sed -i '\#\$(INSTALL_DIR) \$(1)/etc#d' feeds/packages/net/adguardhome/Makefile
+# rm -rf feeds/packages/net/adguardhome
+# git clone --depth 1 https://github.com/kenzok8/openwrt-packages tmp-kenzo
+# mv tmp-kenzo/adguardhome feeds/packages/net/
+# rm -rf tmp-kenzo
+# sed -i '\#files/adguardhome#d' feeds/packages/net/adguardhome/Makefile
+# sed -i '\#\$(INSTALL_DIR) \$(1)/etc#d' feeds/packages/net/adguardhome/Makefile
